@@ -81,7 +81,29 @@ def run():
 
 logger.info("Started Consumer Application")
 logger.info("Reading Command Line Arguments")
+try:
+    arg_dict = dict()
+    for i in range(len(sys.argv)):
+        arg = sys.argv[i]
+        if arg.startswith('-'):
+            arg_dict[arg] = sys.argv[i+1]
+    for arg in arg_dict.keys():
+        if arg == "-rb":
+            bucket_name = arg_dict[arg]
+        elif arg == "-dwt":
+            table_name = arg_dict[arg]
+    if "-rb" not in arg_dict.keys():
+        msg = f"Command line argument for request bucket not supplied. Using default: {bucket_name}"
+        logger.info(msg)
+        print(msg)
+    if "-dwt" not in arg_dict.keys():
+        msg = f"Command line argument for dynamo table not supplied. Using default: {table_name}"
+        logger.info(msg)
+        print(msg)
 
+except:
+    print("Improper arguments given.")
+    logger.error("Invalid command line arguments were supplied")
 
 try:
     run()
