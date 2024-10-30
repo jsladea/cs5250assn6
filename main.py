@@ -8,7 +8,6 @@ import logging
 session = boto3.Session()
 s3_client = session.client('s3')
 s3_resource = boto3.resource('s3')
-dynamo_client = session.client('dynamodb')
 dynamodb = boto3.resource('dynamodb')
 
 bucket_name = 'usu-cs5250-slade-requests'
