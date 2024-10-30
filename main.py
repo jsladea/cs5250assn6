@@ -105,8 +105,10 @@ except:
     print("Improper arguments given.")
     logger.error("Invalid command line arguments were supplied")
 
-try:
-    run()
-except:
-    print("An error occurred.")
-    logger.error("An error occurred.")
+
+if __name__ == "__main__":
+    try:
+        run()
+    except:
+        print("An error occurred.")
+        logger.error("An error occurred.")
