@@ -186,7 +186,7 @@ class TestClass(unittest.TestCase):
                 'WriteCapacityUnits': 10
             }
         )
-        main.run()
+        main.run(False)
         file = open(main.log_filename, 'r')
         file_contents = file.read();
         file.close()
