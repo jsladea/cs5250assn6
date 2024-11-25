@@ -8,16 +8,29 @@ import logging
 session = boto3.Session()
 s3_client = session.client('s3')
 s3_resource = boto3.resource('s3')
+sqs = boto3.resource('sqs')
 dynamodb = boto3.resource('dynamodb')
 
+queue_name = 'cs5250-requests'
 bucket_name = 'usu-cs5250-slade-requests'
 table_name = 'widgets'
 bucket = s3_resource.Bucket(bucket_name)
 table = dynamodb.Table(table_name)
+queue = sqs.get_queue_by_name(QueueName=queue_name)
 tmp_filename = 'temp-file.json'
 log_filename = "assn6-log.log"
 logger = logging.getLogger()
 logging.basicConfig(filename=log_filename, level=logging.INFO)
+
+def reconfigure_resources():
+    global bucket, table, queue
+    bucket = s3_resource.Bucket(bucket_name)
+    table = dynamodb.Table(table_name)
+    queue = sqs.get_queue_by_name(QueueName=queue_name)
+
+def get_widget_data_sqs():
+    result = queue.receive_messages(VisibilityTimeout=35, WaitTimeSeconds=10)
+    print(result)
 
 def get_widget_data():
     widget_objects = list(bucket.objects.all())
@@ -40,6 +53,14 @@ def process_widget(widget):
         process_create_request(widget)
         logger.info("Processed create request")
         print(f"{datetime.datetime.now()} Processed a create request for widget {widget['widgetId']} in request {widget['requestId']}")
+    elif widget['type'] == 'update':
+        process_create_request(widget)
+        logger.info("Processed update request")
+        print(f"{datetime.datetime.now()} Processed an update request for widget {widget['widgetId']} in request {widget['requestId']}")
+    elif widget['type'] == 'delete':
+        if process_delete_request(widget):
+            logger.info("Processed delete request")
+            print(f"{datetime.datetime.now()} Processed a delete request for widget {widget['widgetId']} in request {widget['requestId']}")
 
 
 def process_create_request(widget):
@@ -54,6 +75,20 @@ def process_create_request(widget):
     table.put_item(Item=record_dict)
 
 
+def process_delete_request(widget):
+    key = {
+        "id": widget['widgetId']
+    }
+    try:
+        table.delete_item(Key=key)
+    except:
+        msg = f"Failed to delete widget ({widget['widgetId']})."
+        logger.error(msg)
+        print(msg)
+        return False
+    return True
+
+
 def process_request_other_attributes(attributes):
     attribute_dict = dict()
     for attribute in attributes:
@@ -61,11 +96,11 @@ def process_request_other_attributes(attributes):
     return attribute_dict
 
 
-def run():
+def run(use_queue):
     not_found_count = 0
     logger.info("Processing Widgets")
     while not_found_count < 10:
-        widget = get_widget_data()
+        widget = get_widget_data() if not use_queue else get_widget_data_sqs()
         if not widget:
             not_found_count += 1
             logger.info("Waiting for more widgets")
@@ -75,39 +110,57 @@ def run():
             logger.info(str(widget))
             not_found_count = 0
             process_widget(widget)
-    logger.info("Finished processing all widgets in the request bucket")
+    logger.info(f"Finished processing all widgets in the request {'bucket' if not use_queue else 'queue'}")
 
 
-logger.info("Started Consumer Application")
-logger.info("Reading Command Line Arguments")
-try:
+def read_command_and_init_config():
+    logger.info("Reading Command Line Arguments")
     arg_dict = dict()
     for i in range(len(sys.argv)):
         arg = sys.argv[i]
         if arg.startswith('-'):
-            arg_dict[arg] = sys.argv[i+1]
+            arg_dict[arg] = sys.argv[i + 1]
     for arg in arg_dict.keys():
         if arg == "-rb":
             bucket_name = arg_dict[arg]
         elif arg == "-dwt":
             table_name = arg_dict[arg]
-    if "-rb" not in arg_dict.keys():
-        msg = f"Command line argument for request bucket not supplied. Using default: {bucket_name}"
-        logger.info(msg)
-        print(msg)
-    if "-dwt" not in arg_dict.keys():
-        msg = f"Command line argument for dynamo table not supplied. Using default: {table_name}"
-        logger.info(msg)
-        print(msg)
+        elif arg == "-rq":
+            queue_name = arg_dict[arg]
+    reconfigure_resources()
+    return arg_dict
 
-except:
-    print("Improper arguments given.")
-    logger.error("Invalid command line arguments were supplied")
+
+def process_command():
+    try:
+        arg_dict = read_command_and_init_config()
+
+        if "-dwt" not in arg_dict.keys():
+            msg = f"Command line argument for dynamo table not supplied. Using default: {table_name}"
+            logger.info(msg)
+            print(msg)
+        if "-rb" in arg_dict.keys() and "-rq" in arg_dict.keys():
+            msg = f"Command line arguments for request bucket (-rb) and request queue (-rq) supplied. You may only use one."
+            logger.error(msg)
+            print(msg)
+            return False, False
+        if "-rb" not in arg_dict.keys() and "-rq" not in arg_dict.keys():
+            msg = f"Command line argument for request bucket not supplied, and no argument for for request queue. Using default request bucket: {bucket_name}"
+            logger.info(msg)
+            print(msg)
+        return True, "-rq" in arg_dict.keys()
+    except:
+        print("Improper arguments given.")
+        logger.error("Invalid command line arguments were supplied")
+        return False, False
 
 
 if __name__ == "__main__":
     try:
-        run()
+        logger.info("Started Consumer Application")
+        result = process_command()
+        if result[0]:
+            run(result[1])
     except:
         print("An error occurred.")
         logger.error("An error occurred.")
