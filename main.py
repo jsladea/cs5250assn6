@@ -28,9 +28,11 @@ def reconfigure_resources():
     table = dynamodb.Table(table_name)
     queue = sqs.get_queue_by_name(QueueName=queue_name)
 
+
 def get_widget_data_sqs():
-    result = queue.receive_messages(VisibilityTimeout=35, WaitTimeSeconds=10)
-    print(result)
+    msgs = queue.receive_messages(VisibilityTimeout=35, WaitTimeSeconds=5)
+    return msgs[0] if len(msgs) > 0 else None
+
 
 def get_widget_data():
     widget_objects = list(bucket.objects.all())
@@ -41,6 +43,7 @@ def get_widget_data():
     data = read_data_from_file(tmp_filename)
     s3_client.delete_object(Bucket=bucket_name, Key=widget_key)
     return data
+
 
 def read_data_from_file(filename):
     with open(filename, 'r') as file:
@@ -99,8 +102,15 @@ def process_request_other_attributes(attributes):
 def run(use_queue):
     not_found_count = 0
     logger.info("Processing Widgets")
-    while not_found_count < 10:
-        widget = get_widget_data() if not use_queue else get_widget_data_sqs()
+    wait_count = 10 if not use_queue else 5
+    while not_found_count < wait_count:
+        widget = None
+        msg = None
+        if not use_queue:
+            widget = get_widget_data()
+        else:
+            msg = get_widget_data_sqs()
+            widget = None if not msg else json.loads(msg.body)
         if not widget:
             not_found_count += 1
             logger.info("Waiting for more widgets")
@@ -110,6 +120,8 @@ def run(use_queue):
             logger.info(str(widget))
             not_found_count = 0
             process_widget(widget)
+            if use_queue:
+                msg.delete()
     logger.info(f"Finished processing all widgets in the request {'bucket' if not use_queue else 'queue'}")
 
 
