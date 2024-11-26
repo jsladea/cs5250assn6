@@ -19,7 +19,7 @@ bucket = None
 table = None
 queue = None
 tmp_filename = 'temp-file.json'
-log_filename = "assn7-log.log"
+log_filename = f"assn7-log-{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log"
 logger = logging.getLogger()
 logging.basicConfig(filename=log_filename, level=logging.INFO)
 
