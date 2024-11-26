@@ -4,6 +4,7 @@ import time
 import datetime
 import sys
 import logging
+import re
 
 session = boto3.Session()
 s3_client = session.client('s3')
@@ -14,19 +15,22 @@ dynamodb = boto3.resource('dynamodb')
 queue_name = 'cs5250-requests'
 bucket_name = 'usu-cs5250-slade-requests'
 table_name = 'widgets'
-bucket = s3_resource.Bucket(bucket_name)
-table = dynamodb.Table(table_name)
-queue = sqs.get_queue_by_name(QueueName=queue_name)
+bucket = None
+table = None
+queue = None
 tmp_filename = 'temp-file.json'
-log_filename = "assn6-log.log"
+log_filename = "assn7-log.log"
 logger = logging.getLogger()
 logging.basicConfig(filename=log_filename, level=logging.INFO)
 
-def reconfigure_resources():
+
+def reconfigure_resources(use_queue):
     global bucket, table, queue
-    bucket = s3_resource.Bucket(bucket_name)
     table = dynamodb.Table(table_name)
-    queue = sqs.get_queue_by_name(QueueName=queue_name)
+    if use_queue:
+        queue = sqs.get_queue_by_name(QueueName=queue_name)
+    else:
+        bucket = s3_resource.Bucket(bucket_name)
 
 
 def get_widget_data_sqs():
@@ -126,6 +130,7 @@ def run(use_queue):
 
 
 def read_command_and_init_config():
+    global bucket_name, table_name, queue_name
     logger.info("Reading Command Line Arguments")
     arg_dict = dict()
     for i in range(len(sys.argv)):
@@ -139,7 +144,10 @@ def read_command_and_init_config():
             table_name = arg_dict[arg]
         elif arg == "-rq":
             queue_name = arg_dict[arg]
-    reconfigure_resources()
+            if not re.search("^[A-Za-z0-9_-]{1,80}$", queue_name):
+                logger.error("Invalid Queue Name Specified")
+                print("The queue name is invalid. Make sure you have entered the queue name and not the queue url.")
+    reconfigure_resources("-rq" in arg_dict)
     return arg_dict
 
 
