@@ -5,12 +5,15 @@ import datetime
 import sys
 import logging
 import re
+import os
 
-session = boto3.Session()
+
+region = os.getenv('AWS_REGION', 'us-east-1')
+session = boto3.Session(region_name=region)
 s3_client = session.client('s3')
-s3_resource = boto3.resource('s3')
-sqs = boto3.resource('sqs')
-dynamodb = boto3.resource('dynamodb')
+s3_resource = boto3.resource('s3', region_name=region)
+sqs = boto3.resource('sqs', region_name=region)
+dynamodb = boto3.resource('dynamodb', region_name=region)
 
 queue_name = 'cs5250-requests'
 bucket_name = 'usu-cs5250-slade-requests'
@@ -30,7 +33,7 @@ def reconfigure_resources(use_queue):
     if use_queue:
         queue = sqs.get_queue_by_name(QueueName=queue_name)
     else:
-        bucket = s3_resource.Bucket(bucket_name)
+        bucket = s3_resource.Bucket(bucket_name, region_name=region)
 
 
 def get_widget_data_sqs():
